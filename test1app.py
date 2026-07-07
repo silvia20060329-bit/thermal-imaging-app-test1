@@ -173,15 +173,20 @@ if st.button("🚀 開始分析", type="primary", use_container_width=True):
         res_col1, res_col2 = st.columns([2, 1])
         
         with res_col1:
-            tab1, tab2, tab3 = st.tabs(["疊合總覽結果", "圖層一：牆壁地板分割結果", "圖層二：熱影像特徵"])
+            tab1, tab2, tab3, tab4 = st.tabs(["疊合總覽結果", "圖層一：牆壁地板分割結果", "圖層二：高溫異常區", "圖層三：低溫異常區"])
             
             with tab1:
                 st.image(results["fusion_img"], caption="融合分析總覽圖", use_container_width=True)
+            
             with tab2:
-                st.image(results["material_img"], caption="真實模型推論：牆壁/地板語意分割區域", use_container_width=True)
+                st.image(results["material_img"], caption="牆壁/地板語意分割結果", use_container_width=True)
+            
             with tab3:
-                st.image(results["anomaly_img"], caption="熱影像原始分佈", use_container_width=True)
-                
+                st.image(results["hot_img"], caption="高溫異常區域圈選結果", use_container_width=True)
+            
+            with tab4:
+                st.image(results["cold_img"], caption="低溫異常區域圈選結果", use_container_width=True)
+                            
         with res_col2:
             st.subheader("📝 結構狀態量化報告")
             st.metric(label="當前評估狀態", value=results["status"])
@@ -189,7 +194,8 @@ if st.button("🚀 開始分析", type="primary", use_container_width=True):
             st.markdown(f"""
             **數據統計：**
             * **目標區域比例**：{results["wood_ratio"]}%
-            * **溫度異常面積佔比**：{results["anomaly_ratio"]}%
+            * **高溫異常面積佔比**：{results["high_ratio"]}%
+            * **低溫異常面積佔比**：{results["cold_ratio"]}%
             
             **詳細判定說明：**
             {results["desc"]}
