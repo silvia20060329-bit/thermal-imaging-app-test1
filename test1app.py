@@ -43,8 +43,8 @@ with st.sidebar:
     high_min_area = st.slider("高溫最小面積", 0, 5000, 50, 10)
 
     st.subheader("低溫偵測")
-    cold_quantile = st.slider("低溫候選比例", 0.05, 0.50, 0.30, 0.05)
-    cold_min_area = st.slider("低溫最小面積", 0, 5000, 500, 50)
+    cold_quantile = st.slider("低溫候選比例", 0.05, 0.50, 0.20, 0.05)
+    cold_min_area = st.slider("低溫最小面積", 0, 5000, 1000, 50)
     roi_mode = st.selectbox(
         "低溫偵測範圍",
         options=[None, "bottom_half", "bottom_100"],
