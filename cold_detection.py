@@ -82,7 +82,7 @@ def detect_cold_regions(
 
     h_img, w_img = img_bgr.shape[:2]
 
-    # 只保留 None 或 bottom_half
+    # 只保留 None 或 bottom_half，不再使用 bottom_40 / bottom_100 等模式。
     if roi_mode == "bottom_half":
         y0 = h_img // 2
     elif roi_mode is None:
