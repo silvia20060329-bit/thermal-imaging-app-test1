@@ -105,7 +105,7 @@ def process_pipeline(rgb_img, thermal_img, models):
 
     # 5. 計算高溫佔比 (異常比例)
     total_area = gray_thermal.shape[0] * gray_thermal.shape[1]
-    anomaly_ratio = round((high_temp_area / total_area) * 100, 2)
+    high_temp_ratio = round((high_temp_area / total_area) * 100, 2)
     
     # 模擬材質數據 (因為材質分類模型還沒放進來)
     wood_ratio = 85.0
@@ -121,21 +121,21 @@ def process_pipeline(rgb_img, thermal_img, models):
     thermal_out = cv2.cvtColor(thermal_visual, cv2.COLOR_BGR2RGB)
     
     # ---- 階段 5: 狀態判定 ----
-    if anomaly_ratio > 10.0:
+    if high_temp_ratio > 10.0:
         status_text = "⚠️ 疑似含水"
-        description = f"在切割出的目標區域內偵測到顯著的低溫異常（佔比 {anomaly_ratio}%），高度吻合水氣滲漏特徵。"
+        description_high = f"在切割出的目標區域內偵測到顯著的低溫異常（佔比 {high_temp_ratio}%），高度吻合水氣滲漏特徵。"
     else:
         status_text = "✅ 正常"
-        description = "各區域溫度與材質分佈均勻，未偵測到明顯之異常。"
+        description_high = "各區域溫度與材質分佈均勻，未偵測到明顯之異常。"
 
     return {
         "fusion_img": fusion_visual,
         "material_img": seg_visual,  # 這裡先帶入真實的分割結果
         "anomaly_img": thermal_out,
         "wood_ratio": wood_ratio,
-        "anomaly_ratio": anomaly_ratio,
+        "high_temp__ratio": high_temp_ratio,
         "status": status_text,
-        "desc": description
+        "desc_h": description_high
     }
 
 
