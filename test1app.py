@@ -67,10 +67,48 @@ def process_pipeline(rgb_img, thermal_img, models):
         # if seg_results.masks is not None:
         #     masks = seg_results.masks.data
     
-    # ---- 階段 3 & 4: 其他分支與資訊融合 (暫時維持模擬) ----
-    # 模擬材質與異常數據
+    # ---- 階段 3 & 4: 其他分支與資訊融合 ----
+    
+    # [新增] 熱影像高溫圈選邏輯
+    # 1. 將熱影像轉為灰階，方便利用「亮度」來尋找高溫區
+    gray_thermal = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2GRAY)
+    
+    # 2. 設定閾值 (Threshold)
+    # 這裡假設像素亮度 > 200 的區域就是高溫區 (最高 255)
+    # 💡 提示：你可以根據你的熱影像顏色深淺，把 200 調高或調低
+    _, high_temp_mask = cv2.threshold(gray_thermal, 200, 255, cv2.THRESH_BINARY)
+    
+    # 3. 尋找高溫區域的輪廓
+    contours, _ = cv2.findContours(high_temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # 4. 在圖層上畫出紅色圈選
+    thermal_visual = aligned_thermal.copy()
+    high_temp_area = 0 # 用來記錄高溫總面積
+    
+    for cnt in contours:
+        # 過濾掉太小的雜點 (面積大於 50 像素才畫圈，可依需求調整)
+        if cv2.contourArea(cnt) > 50:
+            high_temp_area += cv2.contourArea(cnt)
+            
+            # 取得該區域的最小包覆圓形
+            (x, y), radius = cv2.minEnclosingCircle(cnt)
+            center = (int(x), int(y))
+            radius = int(radius)
+            
+            # 在圖片上畫紅色圓圈 (OpenCV 是 BGR 格式，所以 (0,0,255) 是紅色)
+            # 參數 3 是線條粗細
+            cv2.circle(thermal_visual, center, radius, (0, 0, 255), 3)
+            
+            # 在圓圈旁邊加上 "High Temp" 文字標籤
+            cv2.putText(thermal_visual, "High Temp", (center[0] - 30, center[1] - radius - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+    # 5. 計算高溫佔比 (異常比例)
+    total_area = gray_thermal.shape[0] * gray_thermal.shape[1]
+    anomaly_ratio = round((high_temp_area / total_area) * 100, 2)
+    
+    # 模擬材質數據 (因為材質分類模型還沒放進來)
     wood_ratio = 85.0
-    anomaly_ratio = 12.5
     
     # 融合總覽：暫時將分割結果作為總覽展示
     fusion_visual = seg_visual.copy()
@@ -78,7 +116,9 @@ def process_pipeline(rgb_img, thermal_img, models):
     # 將 OpenCV 的 BGR 格式轉回 RGB 供 Streamlit 顯示
     fusion_visual = cv2.cvtColor(fusion_visual, cv2.COLOR_BGR2RGB)
     seg_visual = cv2.cvtColor(seg_visual, cv2.COLOR_BGR2RGB)
-    thermal_out = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2RGB)
+    
+    # ⚠️ 這裡要把輸出替換成畫了圈圈的 thermal_visual
+    thermal_out = cv2.cvtColor(thermal_visual, cv2.COLOR_BGR2RGB)
     
     # ---- 階段 5: 狀態判定 ----
     if anomaly_ratio > 10.0:
