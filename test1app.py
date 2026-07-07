@@ -51,7 +51,7 @@ with st.sidebar:
         format_func=lambda x: "整張影像" if x is None else x,
     )
 
-    st.caption("如果同層資料夾有 cold_train/，系統會用裡面的熱影像學習低溫模型；若沒有，會直接用本次上傳的熱影像自動估計。")
+    # st.caption("如果同層資料夾有 cold_train/，系統會用裡面的熱影像學習低溫模型；若沒有，會直接用本次上傳的熱影像自動估計。")
 
 
 # ==========================================
