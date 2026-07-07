@@ -1,4 +1,4 @@
-streamli
+//streamli
 ultralytics
 opencv-python-headless
 pillow
