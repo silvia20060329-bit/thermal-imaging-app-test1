@@ -1,5 +1,8 @@
 import streamlit as st
-import time
+import cv2
+import numpy as np
+from PIL import Image
+from ultralytics import YOLO  # 引入 YOLO 套件
 
 # 設定頁面佈局為寬版
 st.set_page_config(layout="wide", page_title="熱影像與可見光整合分析系統")
@@ -8,7 +11,96 @@ st.title("熱影像與可見光整合分析系統")
 st.markdown("上傳可見光(RGB)與熱影像(Thermal)照片，進行自動化材質分類與異常溫度檢測。")
 
 # ==========================================
-# 1. 介面：圖片上傳區塊
+# 1. 真正載入模型 (使用 快取 確保只載入一次)
+# ==========================================
+@st.cache_resource
+def load_models():
+    """
+    載入位於 weights 資料夾中的模型權重
+    """
+    try:
+        # 真正載入你的牆壁地板分割模型
+        seg_model = YOLO("weights/floor_wall_seg.pt")
+        
+        models = {
+            "seg": seg_model,
+            # 未來如果有材質模型或熱影像模型，可以依此類推加在這裡：
+            # "material": YOLO("weights/material.pt"),
+        }
+        return models
+    except Exception as e:
+        st.error(f"模型載入失敗，請檢查 weights/floor_wall_seg.pt 是否存在。錯誤訊息: {e}")
+        return None
+
+# 執行載入
+with st.spinner("🧠 系統正在載入 AI 模型權重，請稍候..."):
+    my_models = load_models()
+
+
+# ==========================================
+# 2. 後端核心運算 Pipeline
+# ==========================================
+def process_pipeline(rgb_img, thermal_img, models):
+    """
+    影像處理與模型推論流程
+    """
+    # 將 PIL Image 轉換為 OpenCV 格式 (BGR)，方便模型與 CV2 處理
+    rgb_cv = cv2.cvtColor(np.array(rgb_img), cv2.COLOR_RGB2BGR)
+    thermal_cv = cv2.cvtColor(np.array(thermal_img), cv2.COLOR_RGB2BGR)
+    
+    # ---- 階段 1: 影像對齊 (暫時維持模擬，未來可加入對齊演算法) ----
+    aligned_rgb = rgb_cv.copy()
+    aligned_thermal = thermal_cv.copy()
+    
+    # ---- 階段 2: 牆壁/地板區域切割 (使用真實模型) ----
+    seg_visual = aligned_rgb.copy()
+    
+    if models and "seg" in models:
+        # 執行 YOLO 分割模型推論
+        # conf=0.25 表示信心度門檻，可自由調整
+        seg_results = models["seg"](aligned_rgb, conf=0.25)[0]
+        
+        # 將模型的預測結果（框、遮罩）繪製到圖片上
+        seg_visual = seg_results.plot() 
+        
+        # 這裡可以提取 mask 資訊以供後續分析（範例：計算面積或特定區域限制）
+        # if seg_results.masks is not None:
+        #     masks = seg_results.masks.data
+    
+    # ---- 階段 3 & 4: 其他分支與資訊融合 (暫時維持模擬) ----
+    # 模擬材質與異常數據
+    wood_ratio = 85.0
+    anomaly_ratio = 12.5
+    
+    # 融合總覽：暫時將分割結果作為總覽展示
+    fusion_visual = seg_visual.copy()
+    
+    # 將 OpenCV 的 BGR 格式轉回 RGB 供 Streamlit 顯示
+    fusion_visual = cv2.cvtColor(fusion_visual, cv2.COLOR_BGR2RGB)
+    seg_visual = cv2.cvtColor(seg_visual, cv2.COLOR_BGR2RGB)
+    thermal_out = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2RGB)
+    
+    # ---- 階段 5: 狀態判定 ----
+    if anomaly_ratio > 10.0:
+        status_text = "⚠️ 疑似含水"
+        description = f"在切割出的目標區域內偵測到顯著的低溫異常（佔比 {anomaly_ratio}%），高度吻合水氣滲漏特徵。"
+    else:
+        status_text = "✅ 正常"
+        description = "各區域溫度與材質分佈均勻，未偵測到明顯之異常。"
+
+    return {
+        "fusion_img": fusion_visual,
+        "material_img": seg_visual,  # 這裡先帶入真實的分割結果
+        "anomaly_img": thermal_out,
+        "wood_ratio": wood_ratio,
+        "anomaly_ratio": anomaly_ratio,
+        "status": status_text,
+        "desc": description
+    }
+
+
+# ==========================================
+# 3. 前端介面佈局
 # ==========================================
 st.markdown("### 📥 影像上傳")
 col1, col2 = st.columns(2)
@@ -23,68 +115,44 @@ with col2:
     if thermal_file:
         st.image(thermal_file, caption="Thermal 影像預覽", use_container_width=True)
 
-# ==========================================
-# 2. 介面：執行按鈕與流程展示
-# ==========================================
 st.divider()
 
-# 只有當兩張圖都上傳時，按鈕才會有作用
 if st.button("🚀 開始分析", type="primary", use_container_width=True):
     if rgb_file and thermal_file:
         
-        # 模擬後端自動執行的完整流程 (未來這裡替換成你的模型推論程式碼)
-        with st.status("後端模型處理中...", expanded=True) as status:
-            st.write("⏳ 1. 執行影像對齊 (Image Registration)...")
-            time.sleep(1) # 模擬運算時間
-            st.write("⏳ 2. 執行牆壁/地板分類切割 (Semantic Segmentation)...")
-            time.sleep(1)
-            st.write("⏳ 3. 進行材質分類與高低溫異常判斷...")
-            time.sleep(1.5)
-            st.write("⏳ 4. 融合多圖層結果與計算量化數據...")
-            time.sleep(1)
-            status.update(label="分析完成！", state="complete", expanded=False)
-
-        # ==========================================
-        # 3. 介面：結果展示與文字輸出
-        # ==========================================
-        st.markdown("### 📊 分析結果輸出")
+        img_rgb = Image.open(rgb_file).convert("RGB")
+        img_thermal = Image.open(thermal_file).convert("RGB")
         
-        # 建立兩個欄位，左邊放圖片結果，右邊放文字報告
+        with st.status("🧠 AI 模型深度分析中...", expanded=True) as status_msg:
+            st.write("🔄 正在讀取影像並調用牆壁地板分割模型...")
+            results = process_pipeline(img_rgb, img_thermal, my_models)
+            status_msg.update(label="分析處理完成！", state="complete", expanded=False)
+
+        # 呈現結果
+        st.markdown("### 📊 分析結果輸出")
         res_col1, res_col2 = st.columns([2, 1])
         
         with res_col1:
-            # 使用 Tabs 來切換多圖層結果
-            tab1, tab2, tab3 = st.tabs(["疊合總覽", "圖層一：材質分類", "圖層二：高低溫異常"])
+            tab1, tab2, tab3 = st.tabs(["疊合總覽結果", "圖層一：牆壁地板分割結果", "圖層二：熱影像特徵"])
             
             with tab1:
-                # 未來這裡放整合後的圖片 st.image(fusion_result_img)
-                st.info("🖼️ 這裡將顯示影像對齊並融合所有資訊的最終疊合結果圖。")
+                st.image(results["fusion_img"], caption="融合分析總覽圖", use_container_width=True)
             with tab2:
-                # 未來這裡放材質切割圖片 st.image(material_img)
-                st.info("🟫 這裡顯示模型切割出的材質分佈圖（例如：木質地板區域標示）。")
+                st.image(results["material_img"], caption="真實模型推論：牆壁/地板語意分割區域", use_container_width=True)
             with tab3:
-                # 未來這裡放溫度異常圖片 st.image(thermal_anomaly_img)
-                st.info("❄️🔥 這裡顯示標記出異常高低溫圈選的熱影像遮罩。")
+                st.image(results["anomaly_img"], caption="熱影像原始分佈", use_container_width=True)
                 
         with res_col2:
-            st.subheader("📝 狀態量化報告")
-            st.markdown("""
-            **區域分析 (地板)**
-            * **材質比例**：木質地板 85%, 磚牆 15%
-            * **溫度異常佔比**：低溫異常 12% 
+            st.subheader("📝 結構狀態量化報告")
+            st.metric(label="當前評估狀態", value=results["status"])
             
-            **系統綜合判定**
-            * **當前狀態**：⚠️ **疑似含水**
-            * **說明**：在木質地板區域偵測到顯著的低溫異常集中，高度吻合水氣滲漏或積水特徵，建議進一步進行物理檢測。
+            st.markdown(f"""
+            **數據統計：**
+            * **目標區域比例**：{results["wood_ratio"]}%
+            * **溫度異常面積佔比**：{results["anomaly_ratio"]}%
+            
+            **詳細判定說明：**
+            {results["desc"]}
             """)
-            
-            # 提供下載報告或圖片的按鈕
-            st.download_button(
-                label="📥 下載完整分析報告",
-                data="這是一份模擬的報告內容",
-                file_name="analysis_report.txt",
-                mime="text/plain"
-            )
-            
     else:
-        st.error("請先在上方上傳「可見光」與「熱影像」兩張照片，才能開始分析喔！")
+        st.error("請確認兩張影像皆已成功上傳！")
