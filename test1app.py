@@ -130,13 +130,16 @@ def process_pipeline(rgb_img, thermal_img, models):
 
     return {
         "fusion_img": fusion_visual,
-        "material_img": seg_visual,  # 這裡先帶入真實的分割結果
-        "anomaly_img": thermal_out,
+        "material_img": seg_visual, # 這裡先帶入真實的分割結果
+        "hot_img": thermal_out,
+        "cold_img": thermal_out,   # 低溫功能還沒接上前，先暫時用同一張圖避免報錯
         "wood_ratio": wood_ratio,
-        "high_temp__ratio": high_temp_ratio,
+        "high_ratio": high_temp_ratio,
+        "cold_ratio": 0.0,
         "status": status_text,
-        "desc_h": description_high
+        "desc": description_high
     }
+        
 
 
 # ==========================================
