@@ -459,7 +459,7 @@ with st.sidebar:
     unet_area_threshold = st.slider("材質分割小雜訊過濾比例", 0.000, 0.010, 0.002, 0.001)
 
     st.subheader("高溫偵測")
-    high_threshold = st.slider("高溫亮度門檻", 0, 255, 200, 1)
+    high_threshold = st.slider("高溫亮度門檻", 0, 255, 150, 1)
     high_min_area = st.slider("高溫最小面積", 0, 5000, 50, 50)
 
     st.subheader("低溫偵測")
