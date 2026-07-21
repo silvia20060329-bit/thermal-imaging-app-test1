@@ -615,9 +615,12 @@ def process_pipeline(
 
     thresh_v = np.percentile(v_channel, HOT_PERCENT)
     cond_bright = (v_channel >= thresh_v)
-    cond_red = (h_channel <= 15) | (h_channel >= 165)
-    cond_white = (s_channel <= 40) & (v_channel >= 200)
-    cond_color = cond_red | cond_white
+   # 放寬色相條件：將 H 的上限從 15 拉高到 35，藉此涵蓋高溫常見的橘色與黃色
+    cond_red_yellow = (h_channel <= 35) | (h_channel >= 165)
+    # 放寬白色條件：將飽和度 S 的容忍值從 40 拉高到 60，避免解碼誤差導致漏判
+    cond_white = (s_channel <= 60) & (v_channel >= 200)
+    cond_color = cond_red_yellow | cond_white
+    
 
     mask = np.zeros_like(v_channel, dtype=np.uint8)
     mask[cond_bright & cond_color] = 255
