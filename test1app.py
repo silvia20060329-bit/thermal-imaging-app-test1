@@ -37,7 +37,7 @@ except Exception as e:
 
 
 # =========================================================
-# 0. Basic utilities
+# 0. Basic utilities & 高溫偵測專用常數與函式
 # =========================================================
 def cv2_to_rgb(img_bgr):
     return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -54,18 +54,114 @@ def image_to_png_bytes(img_rgb):
     return buf.getvalue()
 
 
+# --- 高溫偵測專用常數 ---
+HOT_PERCENT = 95 # 取亮度最高 5%
+MERGE_THRESHOLD = 20 # 允許兩個框之間的最大距離
+MAX_BOXES = 3 # 最大允許的最終矩形數量
+BOX_COLOR = (0, 255, 255) # 黃色
+BOX_THICKNESS = 3
+EXPAND_RATIO = 0.05
+KERNEL = np.ones((5, 5), np.uint8)
+
+def expand_box(x, y, w, h, W, H, ratio=EXPAND_RATIO):
+    px = int(w * ratio)
+    py = int(h * ratio)
+    return (max(0, x - px), max(0, y - py), 
+            min(W, x + w + px) - max(0, x - px),
+            min(H, y + h + py) - max(0, y - py))
+
+def get_center_and_dims(box):
+    x, y, w, h = box
+    return x, y, x + w, y + h
+
+def check_near_or_overlap(box1, box2, threshold=MERGE_THRESHOLD):
+    """檢查兩個邊界框是否重疊或足夠接近"""
+    x1_min, y1_min, x1_max, y1_max = get_center_and_dims(box1)
+    x2_min, y2_min, x2_max, y2_max = get_center_and_dims(box2)
+
+    overlap_x = max(0, min(x1_max, x2_max) - max(x1_min, x2_min))
+    overlap_y = max(0, min(y1_max, y2_max) - max(y1_min, y2_min))
+    
+    if overlap_x > 0 and overlap_y > 0:
+        return True
+
+    dist_x = 0
+    if x1_max < x2_min: dist_x = x2_min - x1_max
+    elif x2_max < x1_min: dist_x = x1_min - x2_max
+
+    dist_y = 0
+    if y1_max < y2_min: dist_y = y2_min - y1_max
+    elif y2_max < y1_min: dist_y = y1_min - y2_max
+
+    if dist_x <= threshold and dist_y <= threshold:
+        if (overlap_y > 0 or dist_y <= threshold) and (overlap_x > 0 or dist_x <= threshold):
+            return True
+    return False
+
+def merge_boxes(boxes):
+    """迭代合併重疊或接近的邊界框"""
+    if not boxes:
+        return []
+    while True:
+        num_initial_boxes = len(boxes)
+        if num_initial_boxes <= 1:
+            break
+            
+        merged_boxes = []
+        skip = [False] * num_initial_boxes
+        
+        for i in range(num_initial_boxes):
+            if skip[i]:
+                continue
+            box_i = list(boxes[i])
+            for j in range(i + 1, num_initial_boxes):
+                if skip[j]:
+                    continue
+                box_j = boxes[j]
+                if check_near_or_overlap(box_i, box_j):
+                    x1, y1, w1, h1 = box_i
+                    x2, y2, w2, h2 = box_j
+                    x_min, y_min = min(x1, x2), min(y1, y2)
+                    x_max, y_max = max(x1 + w1, x2 + w2), max(y1 + h1, y2 + h2)
+                    box_i[0], box_i[1] = x_min, y_min
+                    box_i[2], box_i[3] = x_max - x_min, y_max - y_min
+                    skip[j] = True
+            merged_boxes.append(tuple(box_i))
+            
+        if len(merged_boxes) == num_initial_boxes:
+            boxes = merged_boxes
+            break
+        else:
+            boxes = merged_boxes
+    return boxes
+
+def merge_all_boxes_into_one(boxes):
+    """將所有邊界框強制合併成一個單一的最小外接矩形"""
+    if not boxes:
+        return []
+    x1, y1, w1, h1 = boxes[0]
+    x_min, y_min = x1, y1
+    x_max, y_max = x1 + w1, y1 + h1
+
+    for x, y, w, h in boxes[1:]:
+        x_min = min(x_min, x)
+        y_min = min(y_min, y)
+        x_max = max(x_max, x + w)
+        y_max = max(y_max, y + h)
+
+    return [(x_min, y_min, x_max - x_min, y_max - y_min)]
+
+
 # =========================================================
 # 1. Mutual Information tools, from utils_mi.py
 # =========================================================
 def to_uint8(img):
-    """Ensure image is uint8 for histogram and display."""
     if img.dtype == np.uint8:
         return img
     return cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
 
 def compute_mutual_information(a, b, bins=64, eps=1e-12, mask=None):
-    """Compute normalized mutual information between two grayscale images."""
     a = to_uint8(a)
     b = to_uint8(b)
 
@@ -92,7 +188,7 @@ def compute_mutual_information(a, b, bins=64, eps=1e-12, mask=None):
 
 
 # =========================================================
-# 2. VIS/IR hybrid alignment, adapted from align_hybrid_vis2ir.py
+# 2. VIS/IR hybrid alignment
 # =========================================================
 def align_hybrid_images(
     vis_bgr,
@@ -105,17 +201,6 @@ def align_hybrid_images(
     step_x=8,
     step_y=16,
 ):
-    """
-    Align visible image to infrared image by MI-based crop search.
-
-    Input:
-        vis_bgr: OpenCV BGR visible image
-        ir_bgr: OpenCV BGR infrared/thermal image
-    Output:
-        aligned_vis_bgr: visible image cropped and resized to IR size
-        aligned_ir_bgr: original IR image, unchanged
-        info: alignment metadata
-    """
     if not enable_alignment:
         return vis_bgr.copy(), ir_bgr.copy(), {
             "enabled": False,
@@ -135,7 +220,6 @@ def align_hybrid_images(
     vis_h, vis_w = vis_bgr.shape[:2]
     ir_h, ir_w = ir_bgr.shape[:2]
 
-    # Scale the original paper/reference crop if input VIS is not 2048x1536.
     base_w, base_h = base_vis_size
     start_x, start_y, tw, th = base_crop
     sx = vis_w / base_w
@@ -151,7 +235,6 @@ def align_hybrid_images(
     step_x = max(1, int(round(step_x * sx)))
     step_y = max(1, int(round(step_y * sy)))
 
-    # If crop is invalid for smaller images, fall back to full resize.
     if tw <= 0 or th <= 0 or tw > vis_w or th > vis_h:
         aligned_vis = cv2.resize(vis_bgr, (ir_w, ir_h))
         return aligned_vis, ir_bgr.copy(), {
@@ -162,7 +245,6 @@ def align_hybrid_images(
         }
 
     ir_gray = cv2.cvtColor(ir_bgr, cv2.COLOR_BGR2GRAY) if len(ir_bgr.shape) == 3 else ir_bgr
-
     best_mi = -1.0
     best_coord = None
 
@@ -202,7 +284,6 @@ def align_hybrid_images(
 
 
 def align_hybrid_logic(vis_path, ir_path, out_dir):
-    """Path-based batch alignment kept for local run_hybrid_batch.py compatibility."""
     vis = cv2.imread(vis_path)
     ir = cv2.imread(ir_path)
     if vis is None or ir is None:
@@ -218,34 +299,8 @@ def align_hybrid_logic(vis_path, ir_path, out_dir):
     return True
 
 
-def run_batch_alignment(base_dir=None):
-    """Batch process data/visible and data/infrared with same filenames."""
-    base_dir = base_dir or os.getcwd()
-    vis_dir = os.path.join(base_dir, "data", "visible")
-    ir_dir = os.path.join(base_dir, "data", "infrared")
-    out_dir = os.path.join(base_dir, "data", "output")
-
-    if not os.path.exists(vis_dir) or not os.path.exists(ir_dir):
-        print("錯誤: 找不到 data/visible 或 data/infrared 資料夾")
-        return
-
-    vis_files = [
-        f for f in os.listdir(vis_dir)
-        if f.lower().endswith((".png", ".jpg", ".jpeg"))
-    ]
-    print(f"開始執行混合對齊處理，共 {len(vis_files)} 張...")
-
-    for fname in vis_files:
-        vis_path = os.path.join(vis_dir, fname)
-        ir_path = os.path.join(ir_dir, fname)
-        if os.path.exists(ir_path):
-            align_hybrid_logic(vis_path, ir_path, out_dir)
-        else:
-            print(f"跳過: {fname} (找不到對應 IR)")
-
-
 # =========================================================
-# 3. U-Net material segmentation, adapted from inference_clean_0.2.py
+# 3. U-Net material segmentation
 # =========================================================
 if TORCH_READY:
     class DoubleConv(nn.Module):
@@ -260,7 +315,6 @@ if TORCH_READY:
 
         def forward(self, x):
             return self.net(x)
-
 
     class UNet(nn.Module):
         def __init__(self, in_ch=3, n_classes=6):
@@ -459,7 +513,7 @@ with st.sidebar:
     unet_area_threshold = st.slider("材質分割小雜訊過濾比例", 0.000, 0.010, 0.002, 0.001)
 
     st.subheader("高溫偵測")
-    high_threshold = st.slider("高溫亮度門檻", 0, 255, 150, 1)
+    high_threshold = st.slider("高溫亮度門檻(未啟用/已改HSV)", 0, 255, 150, 1)
     high_min_area = st.slider("高溫最小面積", 0, 5000, 50, 50)
 
     st.subheader("低溫偵測")
@@ -554,34 +608,57 @@ def process_pipeline(
         small_area_threshold=unet_area_threshold_value,
     )
 
-    # Stage 4: high-temperature detection
-    gray_thermal = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2GRAY)
-    _, high_temp_mask = cv2.threshold(gray_thermal, high_threshold_value, 255, cv2.THRESH_BINARY)
-    contours, _ = cv2.findContours(high_temp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Stage 4: High-temperature detection (改為 HSV 過濾與邊界框合併)
+    H, W = aligned_thermal.shape[:2]
+    hsv = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2HSV)
+    h_channel, s_channel, v_channel = cv2.split(hsv)
 
+    thresh_v = np.percentile(v_channel, HOT_PERCENT)
+    cond_bright = (v_channel >= thresh_v)
+    cond_red = (h_channel <= 15) | (h_channel >= 165)
+    cond_white = (s_channel <= 40) & (v_channel >= 200)
+    cond_color = cond_red | cond_white
+
+    mask = np.zeros_like(v_channel, dtype=np.uint8)
+    mask[cond_bright & cond_color] = 255
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, KERNEL, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, KERNEL, iterations=1)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     hot_visual = aligned_thermal.copy()
     high_temp_area = 0.0
+    initial_boxes = []
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
         if area >= high_min_area_value:
             high_temp_area += area
-            (x, y), radius = cv2.minEnclosingCircle(cnt)
-            center = (int(x), int(y))
-            radius = int(radius)
-            cv2.circle(hot_visual, center, radius, (0, 0, 255), 3)
-            cv2.putText(
-                hot_visual,
-                "High Temp",
-                (center[0] - 40, max(center[1] - radius - 10, 20)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 0, 255),
-                2,
-            )
+            x, y, w, h = cv2.boundingRect(cnt)
+            x, y, w, h = expand_box(x, y, w, h, W, H, ratio=EXPAND_RATIO)
+            initial_boxes.append((x, y, w, h))
 
-    total_area = gray_thermal.shape[0] * gray_thermal.shape[1]
+    # 執行接近度框線合併
+    final_boxes = merge_boxes(initial_boxes)
+    # 強制數量限制
+    if len(final_boxes) > MAX_BOXES:
+        final_boxes = merge_all_boxes_into_one(final_boxes)
+
+    # 繪製矩形與文字
+    for x, y, w, h in final_boxes:
+        cv2.rectangle(hot_visual, (x, y), (x + w, y + h), BOX_COLOR, BOX_THICKNESS)
+        cv2.putText(
+            hot_visual,
+            "High Temp",
+            (x, max(y - 10, 20)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            BOX_COLOR,
+            2,
+        )
+
+    total_area = H * W
     high_temp_ratio = round((high_temp_area / total_area) * 100, 2)
+
 
     # Stage 5: low-temperature detection
     cold_visual = aligned_thermal.copy()
@@ -619,7 +696,6 @@ def process_pipeline(
 
     # Stage 6: fusion overview
     fusion_visual = yolo_visual.copy()
-    # Add high/low thermal contours onto fusion overview after resizing if needed.
     if hot_visual.shape[:2] == fusion_visual.shape[:2]:
         fusion_visual = cv2.addWeighted(fusion_visual, 0.75, hot_visual, 0.25, 0)
 
