@@ -608,7 +608,9 @@ def process_pipeline(
         small_area_threshold=unet_area_threshold_value,
     )
 
-    # Stage 4: High-temperature detection (改為 HSV 過濾與邊界框合併)
+    # ====================================================================
+    # Stage 4: High-temperature detection (改為精確輪廓與半透明遮罩)
+    # ====================================================================
     H, W = aligned_thermal.shape[:2]
     hsv = cv2.cvtColor(aligned_thermal, cv2.COLOR_BGR2HSV)
     h_channel, s_channel, v_channel = cv2.split(hsv)
@@ -624,26 +626,33 @@ def process_pipeline(
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     hot_visual = aligned_thermal.copy()
-    high_temp_area = 0.0
-    initial_boxes = []
+    
+    # 建立一個空白遮罩來精確計算真實的異常像素面積
+    valid_hot_mask = np.zeros((H, W), dtype=np.uint8)
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
         if area >= high_min_area_value:
-            high_temp_area += area
-            x, y, w, h = cv2.boundingRect(cnt)
-            x, y, w, h = expand_box(x, y, w, h, W, H, ratio=EXPAND_RATIO)
-            initial_boxes.append((x, y, w, h))
+            # 只要面積大於門檻，就把這個形狀畫到空白遮罩上 (255 表示發熱)
+            cv2.drawContours(valid_hot_mask, [cnt], -1, 255, -1)
 
-    # 執行接近度框線合併
-    final_boxes = merge_boxes(initial_boxes)
-    # 強制數量限制
-    if len(final_boxes) > MAX_BOXES:
-        final_boxes = merge_all_boxes_into_one(final_boxes)
+    # --- 視覺化修改：捨棄大框框，改用精確塗層 ---
+    # 建立一個疊加用的塗層
+    hot_overlay = hot_visual.copy()
+    # 將判定為發熱的區域塗成紅色 (BGR 格式: 0, 0, 255)
+    hot_overlay[valid_hot_mask == 255] = (0, 0, 255) 
+    
+    # 將半透明紅色疊加回原圖 (設定透明度 50%)
+    cv2.addWeighted(hot_overlay, 0.5, hot_visual, 0.5, 0, hot_visual)
 
-    # 繪製矩形與文字
-    for x, y, w, h in final_boxes:
-        cv2.rectangle(hot_visual, (x, y), (x + w, y + h), BOX_COLOR, BOX_THICKNESS)
+    # 畫出黃色外框線，讓邊緣更清楚
+    final_contours, _ = cv2.findContours(valid_hot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(hot_visual, final_contours, -1, BOX_COLOR, 2)
+
+    # 在面積最大的區塊旁邊加上 "High Temp" 文字
+    if final_contours:
+        largest_contour = max(final_contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest_contour)
         cv2.putText(
             hot_visual,
             "High Temp",
@@ -654,6 +663,8 @@ def process_pipeline(
             2,
         )
 
+    # 2. 精準計算像素面積佔比
+    high_temp_area = np.count_nonzero(valid_hot_mask)
     total_area = H * W
     high_temp_ratio = round((high_temp_area / total_area) * 100, 2)
 
