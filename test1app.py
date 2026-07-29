@@ -402,7 +402,7 @@ with st.sidebar:
     enable_unet = st.checkbox("啟用 U-Net 材質分割", value=True)
     unet_area_threshold = st.slider(
         "材質分割小雜訊過濾比例",
-        0.000, 0.010, 0.002, 0.001,
+        0.000, 0.020, 0.010, 0.001,
         disabled=not enable_unet,
     )
 
