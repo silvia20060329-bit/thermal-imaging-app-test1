@@ -948,13 +948,13 @@ if st.button("🚀 開始分析", type="primary", use_container_width=True):
 * 🔥 **Wall 高溫**：{results['wall_high_ratio']}%
 * ❄️ **Wall 低溫**：{results['wall_cold_ratio']}%
 
-* **U-Net 材質分布比例（佔整張圖）：**
+**U-Net 材質分布比例（佔整張圖）：**
 
-** 紅磚(material_1)**：{results['material_ratios']['紅磚']}%
-** 短磚(floor_2)   **：{results['material_ratios']['短磚']}%
-** 水泥(material_3)**：{results['material_ratios']['水泥']}%
-** 瓷磚(floor_4)   **：{results['material_ratios']['瓷磚']}%
-** 石磚(wall_2)    **：{results['material_ratios']['石磚']}%
+* **紅磚(material_1)**：{results['material_ratios']['紅磚']}%
+* **短磚(floor_2)   **：{results['material_ratios']['短磚']}%
+* **水泥(material_3)**：{results['material_ratios']['水泥']}%
+* **瓷磚(floor_4)   **：{results['material_ratios']['瓷磚']}%
+* **石磚(wall_2)    **：{results['material_ratios']['石磚']}%
 
 **其他資訊：**
 
