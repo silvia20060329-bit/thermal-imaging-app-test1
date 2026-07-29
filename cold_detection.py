@@ -30,9 +30,9 @@ RoiMode = Literal[None, "bottom_half"]
 # 這組參數是展示版預設值：偏藍紫/冷色 + 亮度較低。
 # 若之後低溫框太多/太少，只要微調這三個數字即可。
 DEFAULT_COLD_MODEL: ColdModel = {
-    "h_low": 90.0,
-    "h_high": 135.0,
-    "v_thresh": 130.0,
+    "h_low": 72.30,
+    "h_high": 134.59,
+    "v_thresh": 163.00,
 }
 
 
