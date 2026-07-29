@@ -242,6 +242,37 @@ if TORCH_READY:
 LABEL_MAP = {"material_1": 1, "material_2": 2, "floor_2": 3, "wall_3": 4, "floor_4": 5}
 ID_TO_NAME = {v: k for k, v in LABEL_MAP.items()}
 
+# U-Net 顯示名稱：保留模型訓練時的 class ID，不改動權重對應關係
+MATERIAL_DISPLAY_NAMES = {
+    1: "紅磚",
+    2: "短磚",
+    3: "水泥",
+    4: "瓷磚",
+    5: "石磚",
+}
+
+
+def calculate_material_ratios(mask_full):
+    """計算各材質佔整張對齊後 RGB 影像的像素比例。"""
+    ratios = {name: 0.0 for name in MATERIAL_DISPLAY_NAMES.values()}
+    ratios["背景"] = 0.0
+
+    if mask_full is None or mask_full.size == 0:
+        return ratios
+
+    total_pixels = mask_full.size
+    for class_id, display_name in MATERIAL_DISPLAY_NAMES.items():
+        ratios[display_name] = round(
+            np.count_nonzero(mask_full == class_id) / total_pixels * 100,
+            2,
+        )
+
+    ratios["背景"] = round(
+        np.count_nonzero(mask_full == 0) / total_pixels * 100,
+        2,
+    )
+    return ratios
+
 def remove_small_components(mask, n_classes=6, area_threshold_ratio=0.002, ignore_index=0):
     filtered = mask.copy()
     min_area = mask.size * area_threshold_ratio
@@ -343,7 +374,8 @@ def load_unet_model(model_path):
 
 def run_unet_material_inference(img_bgr, unet_bundle, small_area_threshold=0.002):
     if unet_bundle is None or not TORCH_READY:
-        return img_bgr.copy(), None, 0.0, "U-Net 材質模型未載入。"
+        empty_ratios = calculate_material_ratios(None)
+        return img_bgr.copy(), None, empty_ratios, "U-Net 材質模型未載入。"
 
     img_pil = Image.fromarray(cv2_to_rgb(img_bgr)).convert("RGB")
     w_orig, h_orig = img_pil.size
@@ -362,8 +394,8 @@ def run_unet_material_inference(img_bgr, unet_bundle, small_area_threshold=0.002
     pred_full = cv2.resize(pred_512_filtered, (w_orig, h_orig), interpolation=cv2.INTER_NEAREST)
     pred_pil = draw_visual_result(img_bgr, pred_full, info_text="U-Net Material Prediction")
     pred_rgb = np.array(pred_pil)
-    material_ratio = round((np.count_nonzero(pred_full) / pred_full.size) * 100, 2)
-    return cv2.cvtColor(pred_rgb, cv2.COLOR_RGB2BGR), pred_full, material_ratio, "U-Net 材質推論完成。"
+    material_ratios = calculate_material_ratios(pred_full)
+    return cv2.cvtColor(pred_rgb, cv2.COLOR_RGB2BGR), pred_full, material_ratios, "U-Net 材質推論完成。"
 
 
 
@@ -642,7 +674,7 @@ def process_pipeline(
 
     # U-Net
     if enable_unet_value:
-        material_visual, material_mask, material_ratio, material_desc = run_unet_material_inference(
+        material_visual, material_mask, material_ratios, material_desc = run_unet_material_inference(
             aligned_rgb,
             models.get("unet") if models else None,
             small_area_threshold=unet_area_threshold_value,
@@ -650,7 +682,7 @@ def process_pipeline(
     else:
         material_visual = aligned_rgb.copy()
         material_mask = None
-        material_ratio = 0.0
+        material_ratios = calculate_material_ratios(None)
         material_desc = "U-Net 材質分割已關閉。"
 
     # High
@@ -768,7 +800,7 @@ def process_pipeline(
         "hot_img": cv2_to_rgb(high_visual),
         "cold_img": cv2_to_rgb(cold_visual),
         "target_ratio": target_ratio,
-        "material_ratio": material_ratio,
+        "material_ratios": material_ratios,
         "high_ratio_full": high_ratio_full,
         "cold_ratio_full": cold_ratio_full,
         "floor_high_ratio": floor_high_ratio,
@@ -919,7 +951,15 @@ if st.button("🚀 開始分析", type="primary", use_container_width=True):
 **其他資訊：**
 
 * **YOLO 牆壁/地板目標區域比例**：{results['target_ratio']}%
-* **U-Net 材質區域比例**：{results['material_ratio']}%
+
+**U-Net 材質分布比例（佔整張圖）：**
+
+* **紅磚**：{results['material_ratios']['紅磚']}%
+* **短磚**：{results['material_ratios']['短磚']}%
+* **水泥**：{results['material_ratios']['水泥']}%
+* **瓷磚**：{results['material_ratios']['瓷磚']}%
+* **石磚**：{results['material_ratios']['石磚']}%
+
 * **全圖高溫候選比例**：{results['high_ratio_full']}%
 * **全圖低溫候選比例**：{results['cold_ratio_full']}%
 
