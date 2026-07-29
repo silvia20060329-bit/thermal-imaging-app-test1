@@ -420,7 +420,7 @@ with st.sidebar:
     enable_cold = st.checkbox("啟用低溫偵測", value=True)
     cold_min_area = st.slider(
         "低溫最小面積",
-        0, 5000, 500, 50,
+        0, 5000, 50, 50,
         disabled=not enable_cold,
     )
     roi_mode = st.selectbox(
@@ -432,7 +432,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("6️⃣ 資訊融合顯示")
-    st.caption("可同時勾選多個結果；High / Cold 先獨立偵測，最後才與 Wall / Floor mask 交集。")
+    st.caption("可同時勾選多個結果") # High / Cold 先獨立偵測，最後才與 Wall / Floor mask 交集。
 
     show_floor_high = st.checkbox(
         "🔥 Floor 高溫",
