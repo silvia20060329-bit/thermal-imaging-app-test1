@@ -458,7 +458,7 @@ with st.sidebar:
     roi_mode = st.selectbox(
         "低溫偵測範圍",
         options=[None, "bottom_half"],
-        format_func=lambda x: "整張影像" if x is None else "下半部",
+        format_func=lambda x: "整張影像" if x is None else "上半部",
         disabled=not enable_cold,
     )
 
@@ -724,7 +724,7 @@ def process_pipeline(
                 np.count_nonzero(cold_mask) / cold_mask.size * 100,
                 2,
             )
-            roi_text = "整張影像" if roi_mode_value is None else "下半部"
+            roi_text = "整張影像" if roi_mode_value is None else "上半部"
             cold_desc = f"低溫偵測完成（固定 HSV；偵測範圍：{roi_text}）。"
         except Exception as e:
             cold_desc = f"低溫偵測失敗：{e}"
