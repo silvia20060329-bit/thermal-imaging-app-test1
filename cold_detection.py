@@ -67,14 +67,20 @@ def detect_cold_regions(
     h_high = float(model["h_high"])
     v_thresh = float(model["v_thresh"])
 
-    if roi_mode not in (None, "bottom_half"):
-        raise ValueError("roi_mode 只接受 None 或 'bottom_half'。")
+    if roi_mode not in (None, "top_half"):
+        raise ValueError("roi_mode 只接受 None 或 'top_half'。")
 
     h_img, w_img = img_bgr.shape[:2]
 
     # ROI
-    y0 = h_img // 2 if roi_mode == "bottom_half" else 0
-    roi = img_bgr[y0:, :]
+    if roi_mode == "top_half":
+        y_start = 0
+        y_end = h_img // 2
+    else:
+        y_start = 0
+        y_end = h_img
+    
+    roi = img_bgr[y_start:y_end, :]
 
     # BGR -> HSV
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -86,7 +92,7 @@ def detect_cold_regions(
     cold_candidate = cond_h & cond_v
 
     candidate_mask = np.zeros((h_img, w_img), dtype=np.uint8)
-    candidate_mask[y0:, :] = np.uint8(cold_candidate) * 255
+    candidate_mask[y_start:y_end, :] = np.uint8(cold_candidate) * 255
 
     # 去雜訊 + 補洞
     candidate_mask = cv2.morphologyEx(
