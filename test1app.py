@@ -648,8 +648,7 @@ def process_pipeline(
     elif models and models.get("seg") is not None:
         seg_results = models["seg"](aligned_rgb, conf=seg_conf_value)[0]
         yolo_visual = seg_results.plot()
-        yolo_desc = "YOLO 牆壁/地板分割完成。"
-
+        
         if seg_results.masks is not None and seg_results.boxes is not None:
             cls_names = seg_results.names
 
@@ -664,11 +663,69 @@ def process_pipeline(
                 elif "floor" in class_name or "地" in class_name or class_id == 0:
                     cv2.fillPoly(floor_mask, [poly], 1)
 
+            # --- 新增的牆壁/地板上下補齊邏輯 ---
+            # 備份原始界線，用於最後的雙重保護
+            orig_wall_mask = wall_mask.copy()
+            orig_floor_mask = floor_mask.copy()
+
+            # 判斷每一個 column (X軸) 是否存在牆壁或地板
+            wall_any = wall_mask.any(axis=0)
+            floor_any = floor_mask.any(axis=0)
+
+            # 找出每個 column 最上方(top)與最下方(bottom)的非零索引
+            wall_top = np.argmax(wall_mask, axis=0)
+            wall_bottom = h_img - 1 - np.argmax(wall_mask[::-1, :], axis=0)
+
+            floor_top = np.argmax(floor_mask, axis=0)
+            floor_bottom = h_img - 1 - np.argmax(floor_mask[::-1, :], axis=0)
+
+            new_wall_mask = wall_mask.copy()
+            new_floor_mask = floor_mask.copy()
+
+            # 產生垂直維度的廣播網格 (h_img, 1)
+            Y = np.arange(h_img)[:, None]
+
+            # 1. 只有牆壁的 column：往上填滿牆壁，往下填滿地板
+            only_wall = wall_any & ~floor_any
+            new_wall_mask[(Y < wall_top) & only_wall] = 1
+            new_floor_mask[(Y > wall_bottom) & only_wall] = 1
+
+            # 2. 只有地板的 column：往上填滿牆壁，往下填滿地板
+            only_floor = floor_any & ~wall_any
+            new_wall_mask[(Y < floor_top) & only_floor] = 1
+            new_floor_mask[(Y > floor_bottom) & only_floor] = 1
+
+            # 3. 兩者皆有的 column：牆壁往上填滿，地板往下填滿
+            both = wall_any & floor_any
+            new_wall_mask[(Y < wall_top) & both] = 1
+            new_floor_mask[(Y > floor_bottom) & both] = 1
+
+            # 前提：不可以覆蓋掉既有的界線 (將對方原有的部分挖空)
+            new_wall_mask[orig_floor_mask > 0] = 0
+            new_floor_mask[orig_wall_mask > 0] = 0
+
+            wall_mask = new_wall_mask
+            floor_mask = new_floor_mask
+
+            # 將延伸的區域繪製到 yolo_visual 上方便介面檢視
+            extended_wall = cv2.bitwise_xor(wall_mask, orig_wall_mask)
+            extended_floor = cv2.bitwise_xor(floor_mask, orig_floor_mask)
+
+            overlay = yolo_visual.copy()
+            overlay[extended_wall > 0] = (0, 165, 255)  # 橘色表示延伸的牆壁
+            overlay[extended_floor > 0] = (255, 255, 0) # 青色表示延伸的地板
+            cv2.addWeighted(overlay, 0.4, yolo_visual, 0.6, 0, yolo_visual)
+
+            yolo_desc = "YOLO 牆壁/地板分割完成 (已套用上下延伸補齊)。"
+            # --- 新增補齊邏輯結束 ---
+
             union_mask = cv2.bitwise_or(wall_mask, floor_mask)
             target_ratio = round(
                 np.count_nonzero(union_mask) / union_mask.size * 100,
                 2,
             )
+        else:
+            yolo_desc = "YOLO 牆壁/地板分割完成 (未偵測到目標)。"
     else:
         yolo_desc = "YOLO 模型未載入。"
 
