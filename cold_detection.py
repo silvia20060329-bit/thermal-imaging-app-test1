@@ -26,9 +26,9 @@ import numpy as np
 
 
 DEFAULT_COLD_MODEL: Dict[str, float] = {
-    "h_low": 72.30,
-    "h_high": 190,
-    # "h_high": 134.59,
+    # "h_low": 72.30,
+    "h_low": 30.30,
+    "h_high": 134.59,
     "v_thresh": 163.00,
 }
 
