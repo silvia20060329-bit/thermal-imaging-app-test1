@@ -1,0 +1,18 @@
+獨立部署：牆壁、地板與材質辨識
+
+在 Streamlit Community Cloud 選擇 Create app，建立新的 App。
+Repository: silvia20060329-bit/thermal-imaging-app-test1
+Branch: codex/surface-only
+Main file path: test1app.py
+Python version: 3.11
+App URL 建議: hahahehe-surface（須以 Streamlit 顯示可用為準）
+
+原網站 https://hahahehetest1.streamlit.app/ 保留原本的部署設定。
+不要將此分支合併至 main，也不要編輯或重新指定原 App 的分支。
+
+本機啟動：
+python -m streamlit run test1app.py
+
+本頁只使用一張可見光照片，執行牆壁／地板與材質辨識。
+權重檔案沿用 weights/floor_wall_seg.pt 及 weights/unet_vis_best.pth。
+雲端依賴固定至已驗證版本，PyTorch 使用 CPU 版本。
