@@ -114,7 +114,7 @@ def main():
             for name, ratio in result["ratios"].items()
         ])
         with st.expander("圖中標籤對照"):
-            st.write("material_1：紅磚；material_2：水泥；floor_2：短磚；wall_3：石磚；floor_4：瓷磚。")
+            st.write("material_1：紅磚；material_2：石頭；floor_2：短磚；wall_3：水泥；floor_4：瓷磚。")
         st.download_button("下載材質結果", models.image_to_png_bytes(result["material"]),
                            file_name="material_result.png", mime="image/png")
 
