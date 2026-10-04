@@ -85,9 +85,9 @@ ID_TO_NAME = {v: k for k, v in LABEL_MAP.items()}
 # U-Net 顯示名稱：保留模型訓練時的 class ID，不改動權重對應關係
 MATERIAL_DISPLAY_NAMES = {
     1: "紅磚",
-    2: "水泥",
+    2: "石頭",
     3: "短磚",
-    4: "石磚",
+    4: "水泥",
     5: "瓷磚",
 }
 
