@@ -49,13 +49,9 @@ def main():
     st.set_page_config(page_title="牆壁、地板與材質辨識", layout="wide")
     st.title("牆壁、地板與材質辨識")
     st.write("上傳一張可見光照片，查看牆壁、地板及各種材質的分割結果。")
-    with st.sidebar:
-        st.header("辨識設定")
-        confidence = 0.05
-        extend_regions = st.checkbox("牆壁／地板上下延伸補齊", value=True)
-        st.caption("依已辨識的邊界向上、向下補齊區域。補齊部分是位置推估，可能包含家具等物件。")
-        area_threshold = st.slider("材質小區域過濾比例", 0.0, 0.02, 0.002, 0.001, format="%.3f")
-        st.caption("小於整張照片此比例的材質區域會歸為背景。")
+    confidence = 0.05
+    extend_regions = True
+    area_threshold = 0.002
 
     uploaded = st.file_uploader("上傳可見光照片", type=["jpg", "jpeg", "png"])
     if uploaded is None:
@@ -101,7 +97,7 @@ def main():
         left.metric("牆壁占整張照片", f"{result['wall_ratio']:.2f}%")
         right.metric("地板占整張照片", f"{result['floor_ratio']:.2f}%")
         if not (result["wall_ratio"] or result["floor_ratio"]):
-            st.info("未偵測到牆壁或地板，可嘗試降低信心門檻或更換照片。")
+            st.info("未偵測到牆壁或地板，請嘗試更換照片。")
         if extend_regions:
             st.caption("顯示與比例包含上下延伸補齊的推估區域。")
         st.download_button("下載牆壁／地板結果", models.image_to_png_bytes(result["surface"]),
