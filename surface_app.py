@@ -51,7 +51,7 @@ def main():
     st.write("上傳一張可見光照片，查看牆壁、地板及各種材質的分割結果。")
     with st.sidebar:
         st.header("辨識設定")
-        confidence = st.slider("牆壁／地板辨識信心門檻", 0.05, 0.95, 0.25, 0.05)
+        confidence = 0.05
         extend_regions = st.checkbox("牆壁／地板上下延伸補齊", value=True)
         st.caption("依已辨識的邊界向上、向下補齊區域。補齊部分是位置推估，可能包含家具等物件。")
         area_threshold = st.slider("材質小區域過濾比例", 0.0, 0.02, 0.002, 0.001, format="%.3f")
